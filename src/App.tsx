@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { motion } from 'framer-motion'
+import Lenis from 'lenis'
+import bgImg from './assets/bg.png'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -13,8 +15,21 @@ function App() {
     const container = containerRef.current
     if (!container) return
 
-    let ctx = gsap.context(() => {
-      const panels = gsap.utils.toArray(".panel")
+    // Initialize Lenis smooth scrolling
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smooth: true,
+    })
+
+    function raf(time: number) {
+      lenis.raf(time)
+      requestAnimationFrame(raf)
+    }
+    requestAnimationFrame(raf)
+
+    const ctx = gsap.context(() => {
+      const panels = gsap.utils.toArray<HTMLElement>(".panel")
       
       // CORRECT mathematical approach based on references
       gsap.to(panels, {
@@ -27,7 +42,7 @@ function App() {
           scrub: 1,
           snap: 1 / (panels.length - 1),
           end: () => "+=" + (window.innerWidth * (panels.length - 1)),
-          onUpdate: (self) => {
+          onUpdate: () => {
             // Force container to stay at top
             gsap.set(container, { y: 0 })
           },
@@ -40,16 +55,18 @@ function App() {
               y: 0
             })
           }
-        }
+        } as ScrollTrigger.Vars
       })
-      
       // Simple animations
-      gsap.utils.toArray(".fade-in").forEach((el: any) => {
+      const fadeEls = gsap.utils.toArray<HTMLElement>(".fade-in")
+      fadeEls.forEach((el) => {
         gsap.fromTo(el, 
-          { opacity: 0, y: 50 },
+          { opacity: 0, y: 50, filter: "blur(10px)" },
           {
             opacity: 1, 
             y: 0,
+            filter: "blur(0px)",
+            duration: 1,
             scrollTrigger: {
               trigger: el,
               start: "left 80%",
@@ -59,9 +76,80 @@ function App() {
         )
       })
 
+      // Animated number counters - simpler approach
+      let numbersAnimated = false
+      
+      ScrollTrigger.create({
+        trigger: ".scroll-spacer",
+        start: "top top",
+        end: "bottom bottom",
+        onUpdate: (self) => {
+          // Trigger animation when scrolling into about section (around 25% progress)
+          if (self.progress > 0.2 && self.progress < 0.6 && !numbersAnimated) {
+            numbersAnimated = true
+            
+            const statNumbers = gsap.utils.toArray<HTMLElement>(".stat h3")
+            statNumbers.forEach((el, index) => {
+              // Check if this has a .stat-number span (for weight with unit)
+              const numberSpan = el.querySelector('.stat-number')
+              const targetEl = numberSpan || el
+              const finalNumber = parseInt(targetEl.textContent || '0')
+              const obj = { number: 0 }
+              
+              gsap.set(targetEl, { textContent: "0" })
+              
+              gsap.to(obj, {
+                number: finalNumber,
+                duration: 2,
+                ease: "power2.out",
+                delay: index * 0.3,
+                onUpdate: () => {
+                  targetEl.textContent = Math.round(obj.number).toString()
+                },
+                onComplete: () => {
+                  targetEl.textContent = finalNumber.toString()
+                }
+              })
+            })
+          }
+          
+          // Reset when going back
+          if (self.progress < 0.15 && numbersAnimated) {
+            numbersAnimated = false
+            const statNumbers = gsap.utils.toArray<HTMLElement>(".stat h3")
+            statNumbers.forEach((el) => {
+              const numberSpan = el.querySelector('.stat-number')
+              const targetEl = numberSpan || el
+              gsap.set(targetEl, { textContent: "0" })
+            })
+          }
+        }
+      })
+
+      // Parallax effects for visual elements
+      gsap.utils.toArray<HTMLElement>(".headphones-container").forEach((el) => {
+        gsap.fromTo(el, 
+          { y: 50, scale: 0.9, filter: "blur(5px)" },
+          {
+            y: -50,
+            scale: 1.05,
+            filter: "blur(0px)",
+            scrollTrigger: {
+              trigger: el,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 1
+            }
+          }
+        )
+      })
+
     }, container)
 
-    return () => ctx.revert()
+    return () => {
+      ctx.revert()
+      lenis.destroy()
+    }
   }, [])
 
   return (
@@ -78,17 +166,25 @@ function App() {
             <div className="hero-content">
               <motion.h1 
                 className="hero-title"
-                initial={{ opacity: 0, y: 100 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 1.2, delay: 0.2 }}
+                initial={{ opacity: 0, y: 100, filter: "blur(20px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{ 
+                  duration: 1.5, 
+                  delay: 0.3,
+                  ease: [0.25, 0.46, 0.45, 0.94]
+                }}
               >
-                Silent Spaces
+                Find Your Peace
               </motion.h1>
               <motion.p 
                 className="hero-subtitle fade-in"
-                initial={{ opacity: 0, y: 50 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 1, delay: 0.6 }}
+                initial={{ opacity: 0, y: 50, filter: "blur(10px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{ 
+                  duration: 1.2, 
+                  delay: 0.8,
+                  ease: "easeOut"
+                }}
               >
                 In the quiet corners of urban nights, where streetlights cast long shadows 
                 and the city breathes in whispers, we find technology that disappears.
@@ -101,25 +197,48 @@ function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 1 }}
               >
-                <motion.button 
-                  className="btn btn-primary"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.99 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  Experience Silence
-                </motion.button>
+                
               </motion.div>
             </div>
             <div className="hero-visual">
               <motion.div 
                 className="headphones-container"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 1.5, delay: 0.8 }}
+                initial={{ 
+                  opacity: 0, 
+                  scale: 0.8, 
+                  filter: "blur(15px)",
+                  rotateY: 45
+                }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1, 
+                  filter: "blur(0px)",
+                  rotateY: 0
+                }}
+                transition={{ 
+                  duration: 2, 
+                  delay: 1,
+                  ease: [0.25, 0.46, 0.45, 0.94]
+                }}
+                whileHover={{
+                  scale: 1.05,
+                  rotateY: 5,
+                  transition: { duration: 0.4 }
+                }}
               >
                 <div className="headphones-placeholder">
-                  <div className="headphones-silhouette"></div>
+                  {/* Imagem centralizada em círculo */}
+                  <img 
+                    src={bgImg}
+                    alt="Headphones" 
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      borderRadius: '50%',
+                      display: 'block',
+                    }}
+                  />
                 </div>
               </motion.div>
             </div>
@@ -154,8 +273,12 @@ function App() {
                     <p>dB of quiet</p>
                   </div>
                   <div className="stat fade-in">
-                    <h3>8</h3>
-                    <p>Listening ears</p>
+                    <h3>
+                    <p>All in just</p>
+                      <span className="stat-number">9</span>
+                      <small style={{ fontSize: '0.6em', marginLeft: '0.2em', verticalAlign: 'super' }}>oz</small>
+                    </h3>
+                   
                   </div>
                 </div>
               </div>
@@ -170,8 +293,13 @@ function App() {
             <div className="features-grid">
               <motion.div 
                 className="feature-card fade-in"
-                whileHover={{ y: -2 }}
-                transition={{ duration: 0.15 }}
+                whileHover={{ 
+                  y: -8, 
+                  scale: 1.02,
+                  filter: "brightness(1.1)",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.3)"
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <div className="feature-icon">
                   <div className="icon-precision"></div>
@@ -181,8 +309,13 @@ function App() {
               </motion.div>
               <motion.div 
                 className="feature-card fade-in"
-                whileHover={{ y: -2 }}
-                transition={{ duration: 0.15 }}
+                whileHover={{ 
+                  y: -8, 
+                  scale: 1.02,
+                  filter: "brightness(1.1)",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.3)"
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <div className="feature-icon">
                   <div className="icon-audio"></div>
@@ -192,8 +325,13 @@ function App() {
               </motion.div>
               <motion.div 
                 className="feature-card fade-in"
-                whileHover={{ y: -2 }}
-                transition={{ duration: 0.15 }}
+                whileHover={{ 
+                  y: -8, 
+                  scale: 1.02,
+                  filter: "brightness(1.1)",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.3)"
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <div className="feature-icon">
                   <div className="icon-comfort"></div>
@@ -203,8 +341,13 @@ function App() {
               </motion.div>
               <motion.div 
                 className="feature-card fade-in"
-                whileHover={{ y: -2 }}
-                transition={{ duration: 0.15 }}
+                whileHover={{ 
+                  y: -8, 
+                  scale: 1.02,
+                  filter: "brightness(1.1)",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.3)"
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <div className="feature-icon">
                   <div className="icon-charge"></div>
@@ -259,9 +402,20 @@ function App() {
               <p className="final-text">
                 Available now. Experience the poetry of perfect silence.
               </p>
-              <button className="final-button">Order Now</button>
+              <motion.button 
+                className="final-button"
+                whileHover={{ 
+                  scale: 1.05,
+                  filter: "brightness(1.2)",
+                  boxShadow: "0 10px 30px rgba(255,255,255,0.2)"
+                }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+              >
+                Order Now
+              </motion.button>
               <div className="final-footer">
-                <p>© 2024 Sony Corporation. All rights reserved.</p>
+                <p>Poetry of Silence</p>
               </div>
             </div>
           </div>
